@@ -1,0 +1,24 @@
+# 서비스 객체의 API 버전
+apiVersion: v1
+# 생성할 객체의 유형
+kind: Service
+metadata:
+  # 서비스 이름. 유효한 DSN 이름이어야 한다.
+  name: comp-value-service
+  namespace: comp-value
+  # 서비스에 추가 될 레이블
+  labels:
+    app: comp-value-service
+spec:
+  # 서비스의 유형
+  type: ClusterIP
+  # 대상으로 삼고 노출해야 하는 파드를 찾는 데 사용할 레이블
+  selector:
+    app: comp-value-service
+  ports:
+   # 서비스가 사용할 네트워크 프로토콜
+   - protocol: TCP
+     # 서비스가 노출할 포트
+     port: 80
+     # 서비스의 대상이 되는 파드가 노출할 포트
+     targetPort: 18080

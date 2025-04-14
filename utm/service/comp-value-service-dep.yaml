@@ -24,6 +24,8 @@ spec:
       labels:
         app: comp-value-service
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: wk2 # 워커노드
       # 파드 컨테이너의 목록
       containers:
         # 파드 이름

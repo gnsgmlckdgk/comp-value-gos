@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: comp-value-ingress
+  namespace: comp-value
+spec:
+  rules:
+    - host: compvalue.local
+      http:
+        paths:
+          - path: /dart
+            pathType: Prefix
+            backend:
+              service:
+                name: comp-value-service
+                port:
+                  number: 80

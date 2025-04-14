@@ -1,0 +1,74 @@
+# 배포 객체에 대한 API 버전
+apiVersion: apps/v1
+# 생성할 객체의 유형
+kind: Deployment
+metadata:
+  # 배포의 이름
+  name: comp-value-service
+  namespace: comp-value
+  # 배포에 추가할 레이블의 집합
+  labels:
+    # 이 배포는 "app=comp-value-service"라는 레이블을 갖는다.
+    app: comp-value-service
+spec:
+  # 몇 개의 파드 복제본을 배포할 것인지 설정한다.
+  replicas: 2
+  # 확장할 파드를 선택하기 위해 사용할 레이블을 정의한다.
+  selector:
+    matchLabels:
+      app: comp-value-service
+  # 파드 생성을 위한 템플릿
+  template:
+    metadata:
+      # 파드 객체에 추가되는 레이블. 레이블은 셀렉터로 사용하는 것과 일치해야한다.
+      labels:
+        app: comp-value-service
+    spec:
+      # 파드 컨테이너의 목록
+      containers:
+        # 파드 이름
+        - name: dart-comp-service
+          # 컨테이너를 실행하기 위해 사용할 이미지. 태그가 정의되지 않으면 latest가 암묵적으로 사용된다.
+          #image: dart-comp-service
+          image: ghcr.io/gnsgmlckdgk/comp-value-service:latest
+          # 이미지가 로컬에 없는 경우에만 컨테이너 저장소에서 이미지를 다운로드 받을 것을 쿠버네티스에게 지시한다.
+          #imagePullPolicy: IfNotPresent
+          # 무조건 저장소에서 새로 받아옴(로컬에 있어도)
+          imagePullPolicy: Always
+          # 쿠버네티스 파드에 SIGTERM 신호를 보내기 전에 5초를 기다리게 한다.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          ports:
+            # 컨테이너에 의해 노출되는 포트
+            - containerPort: 18080
+          resources:
+            requests:
+              cpu: "250m" # 0.25코어
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          # 파드로 전달되는 환경 변수의 목록
+          env:
+            # 헤드레스 서비스 주소 규칙: <Pod이름>.<HeadlessService이름>.<네임스페이스>.svc.cluster.local
+            # - 헤드레스서비스 : clusterIP: None  으로 설정한거
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres-0.postgres.comp-value.svc.cluster.local:5432/COMP_VALUE
+            # 'test' 스프링 프로파일 활성화(테스트컨테이너)
+#            - name: SPRING_PROFILES_ACTIVE
+#              value: test
+            - name: OPEN_DART_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dart-secret
+                  key: api-key
+          # 나중에 테스트(nginx dns 갱신 확인용)
+          readinessProbe:
+            httpGet:
+              path: /dart/actuator/health
+              port: 18080  # 여긴 네 백엔드 컨테이너가 실제로 리스닝하는 포트
+            initialDelaySeconds: 10
+            periodSeconds: 5
+

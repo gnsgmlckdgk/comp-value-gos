@@ -4,13 +4,13 @@ metadata:
   name: comp-value-ingress
   namespace: comp-value
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   rules:
     - host: compvalue.local
       http:
         paths:
-          - path: /dart(/|$)(.*)
+          - path: /dart
             pathType: Prefix
             backend:
               service:

@@ -49,6 +49,7 @@ securityContext: {}
 service:
   type: NodePort   # 서비스 타입 (예: ClusterIP, NodePort, LoadBalancer 등)
   port: 80          # 서비스 포트
+  nodePort: 30001
   targetPort: 80
 
 # 인그레스 설정

@@ -1,46 +1,42 @@
-# Default values for frontend.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# frontend 기본 values 설정입니다.
+# YAML 형식의 파일이며, 템플릿에 전달될 변수들을 정의합니다.
 
-# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+# 파드 복제본 수 설정 (ReplicaSet에 적용)
 replicaCount: 1
 
-# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+# 컨테이너 이미지 설정
 image:
-  repository: nginx
-  # This sets the pull policy for images.
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  repository: ghcr.io/gnsgmlckdgk/comp-value-admin:latest  # 사용할 이미지 저장소
+  pullPolicy: Always  # 이미지 풀 정책 (이미지가 없을 때만 가져옴)
+  tag: "latest"  # 이미지 태그 (기본값은 차트 appVersion)
 
-# This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets: []
-# This is to override the chart name.
+# 프라이빗 레지스트리에서 이미지를 가져올 때 사용하는 시크릿 설정
+imagePullSecrets: 
+  - name: ghcr-secret
+
+# 차트 이름을 오버라이드할 수 있는 옵션
 nameOverride: ""
 fullnameOverride: ""
 
-# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+# 서비스 어카운트 설정
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  create: true        # 새로운 서비스 어카운트 생성 여부
+  automount: true     # API 토큰 자동 마운트 여부
+  annotations: {}     # 서비스 어카운트에 붙일 어노테이션
+  name: ""            # 사용할 서비스 어카운트 이름 (비워두면 자동 생성됨)
 
-# This is for setting Kubernetes Annotations to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+# 파드에 붙일 어노테이션
 podAnnotations: {}
-# This is for setting Kubernetes Labels to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-podLabels: {}
 
+# 파드에 붙일 레이블
+podLabels:
+  app: comp-value-admin
+
+# 파드 보안 컨텍스트 설정
 podSecurityContext: {}
   # fsGroup: 2000
 
+# 컨테이너 보안 컨텍스트 설정
 securityContext: {}
   # capabilities:
   #   drop:
@@ -49,18 +45,17 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+# 서비스 설정
 service:
-  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  type: ClusterIP
-  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  port: 80
+  type: NodePort   # 서비스 타입 (예: ClusterIP, NodePort, LoadBalancer 등)
+  port: 80          # 서비스 포트
+  targetPort: 80
 
-# This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
+# 인그레스 설정
 ingress:
-  enabled: false
-  className: ""
-  annotations: {}
+  enabled: false        # 인그레스 활성화 여부
+  className: ""         # 인그레스 클래스 이름 (예: nginx)
+  annotations: {}       # 인그레스에 붙일 어노테이션
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   hosts:
@@ -68,16 +63,14 @@ ingress:
       paths:
         - path: /
           pathType: ImplementationSpecific
-  tls: []
+  tls: []               # TLS 설정 (예: 인증서, 비밀키 등)
   #  - secretName: chart-example-tls
   #    hosts:
   #      - chart-example.local
 
+# 리소스 요청/제한 설정
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # 디폴트로는 설정하지 않음. 설정하려면 아래 주석을 해제하고 값 수정.
   # limits:
   #   cpu: 100m
   #   memory: 128Mi
@@ -85,7 +78,7 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
-# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+# 헬스체크 (liveness, readiness) 설정
 livenessProbe:
   httpGet:
     path: /
@@ -95,7 +88,7 @@ readinessProbe:
     path: /
     port: http
 
-# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
+# 오토스케일링 설정
 autoscaling:
   enabled: false
   minReplicas: 1
@@ -103,21 +96,25 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
-# Additional volumes on the output Deployment definition.
+# 추가 볼륨 정의
 volumes: []
 # - name: foo
 #   secret:
 #     secretName: mysecret
 #     optional: false
 
-# Additional volumeMounts on the output Deployment definition.
+# 추가 볼륨 마운트 정의
 volumeMounts: []
 # - name: foo
 #   mountPath: "/etc/foo"
 #   readOnly: true
 
-nodeSelector: {}
+# 노드 셀렉터 설정
+nodeSelector: 
+  kubernetes.io/hostname: wk2
 
+# 톨러레이션 설정 (예: 특정 노드에만 스케줄링 허용)
 tolerations: []
 
+# 파드 간의 친화성 설정
 affinity: {}

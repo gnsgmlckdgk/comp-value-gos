@@ -6,7 +6,7 @@ replicaCount: 1
 
 # 컨테이너 이미지 설정
 image:
-  repository: ghcr.io/gnsgmlckdgk/comp-value-admin:latest  # 사용할 이미지 저장소
+  repository: ghcr.io/gnsgmlckdgk/comp-value-admin  # 사용할 이미지 저장소
   pullPolicy: Always  # 이미지 풀 정책 (이미지가 없을 때만 가져옴)
   tag: "latest"  # 이미지 태그 (기본값은 차트 appVersion)
 
@@ -16,7 +16,7 @@ imagePullSecrets:
 
 # 차트 이름을 오버라이드할 수 있는 옵션
 nameOverride: ""
-fullnameOverride: ""
+fullnameOverride: "comp-value-admin"
 
 # 서비스 어카운트 설정
 serviceAccount:

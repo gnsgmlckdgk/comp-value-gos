@@ -12,7 +12,7 @@ metadata:
     app: comp-value-service
 spec:
   # 몇 개의 파드 복제본을 배포할 것인지 설정한다.
-  replicas: 2
+  replicas: 1
   # 확장할 파드를 선택하기 위해 사용할 레이블을 정의한다.
   selector:
     matchLabels:
@@ -54,6 +54,8 @@ spec:
               memory: "1Gi"
           # 파드로 전달되는 환경 변수의 목록
           env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xmx768m -Xms512m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
             # 헤드레스 서비스 주소 규칙: <Pod이름>.<HeadlessService이름>.<네임스페이스>.svc.cluster.local
             # - 헤드레스서비스 : clusterIP: None  으로 설정한거
             - name: SPRING_DATASOURCE_URL

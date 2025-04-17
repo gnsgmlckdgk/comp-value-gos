@@ -49,6 +49,7 @@ securityContext: {}
 service:
   type: NodePort   # 서비스 타입 (예: ClusterIP, NodePort, LoadBalancer 등)
   port: 80          # 서비스 포트
+  nodePort: 30001
   targetPort: 80
 
 # 인그레스 설정
@@ -111,7 +112,7 @@ volumeMounts: []
 
 # 노드 셀렉터 설정
 nodeSelector: 
-  kubernetes.io/hostname: wk2
+  kubernetes.io/hostname: wk1
 
 # 톨러레이션 설정 (예: 특정 노드에만 스케줄링 허용)
 tolerations: []

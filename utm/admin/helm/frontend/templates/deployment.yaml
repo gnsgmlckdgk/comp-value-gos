@@ -13,10 +13,11 @@ spec:
       {{- include "frontend.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        rollme: "{{ now | unixEpoch }}" # yml 이 변경된게 없어도 Upgrade시 파드 갱신
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 6 }}
+        {{- end }}
       labels:
         {{- include "frontend.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}

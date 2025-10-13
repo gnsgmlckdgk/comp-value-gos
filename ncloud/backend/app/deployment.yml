@@ -1,0 +1,90 @@
+# ---------------------------------------------
+# Deployment: comp-value-service
+# - ghcr.io에 올려둔 스프링부트 이미지를 실행하는 Pod 생성
+# - DB(PostgreSQL) / Redis 연결정보를 환경변수로 주입
+# - 파드 이름(label)은 comp-value-service 로 통일
+# ---------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comp-value-service                 # Deployment 이름 (관리 단위)
+  labels:
+    app: comp-value-service                # 라벨 (Service 연결용)
+spec:
+  replicas: 1                              # 파드 개수 (1개 실행)
+  selector:
+    matchLabels:
+      app: comp-value-service              # 파드 선택 기준 (라벨 일치해야 함)
+  template:
+    metadata:
+      labels:
+        app: comp-value-service            # 파드 라벨 (Service selector와 일치)
+    spec:
+      containers:
+        - name: comp-value-service
+          image: ghcr.io/gnsgmlckdgk/comp-value-service:latest  # 스프링부트 이미지
+          imagePullPolicy: Always     # 매번 pull
+          ports:
+            - containerPort: 18080          # 앱 내부 리스닝 포트
+          env:
+            # --- PostgreSQL 연결 설정 ---
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres-service:5432/COMP_VALUE"  # DB 접속 URL
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "compvalue"            # DB 유저명
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "compvalue"            # DB 비밀번호
+
+            # --- Redis 연결 설정 ---
+            - name: SPRING_REDIS_HOST
+              value: "redis-nodeport"       # Redis 서비스 이름 (쿠버 내부 DNS)
+            - name: SPRING_REDIS_PORT
+              value: "6379"                 # Redis 포트
+            - name: SPRING_REDIS_PASSWORD
+              value: "1234"                 # Redis 비밀번호
+
+            # --- (선택) 환경 설정 / 시간대 ---
+            # - name: SPRING_PROFILES_ACTIVE
+            #   value: "prod"
+            # - name: TZ
+            #   value: "Asia/Seoul"
+
+          # --- (선택) 헬스체크: 액추에이터 사용 시 ---
+          # readinessProbe:
+          #   httpGet:
+          #     path: /actuator/health
+          #     port: 18080
+          #   initialDelaySeconds: 10
+          #   periodSeconds: 5
+          # livenessProbe:
+          #   httpGet:
+          #     path: /actuator/health
+          #     port: 18080
+          #   initialDelaySeconds: 20
+          #   periodSeconds: 10
+
+      # (선택) ghcr.io private repository면 secret 필요
+      # imagePullSecrets:
+      #   - name: ghcr-creds
+
+---
+# ---------------------------------------------
+# Service: comp-value-service
+# - 스프링부트 앱을 쿠버 내부에서 접근 가능하게 함
+# - 포트 18080 으로 노출 (내부 통신용)
+# ---------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: comp-value-service                 # 서비스 이름 (DNS 주소로 사용됨)
+  labels:
+    app: comp-value-service
+spec:
+  type: ClusterIP                          # 클러스터 내부 전용 서비스
+  selector:
+    app: comp-value-service                # 해당 라벨을 가진 파드로 연결
+  ports:
+    - name: http
+      nodePort: 38081                      # 호스트 외부 포트 (nodePort -> port -> targetPort)
+      port: 18080                          # 서비스가 노출할 포트
+      targetPort: 18080                    # 컨테이너 내부 포트

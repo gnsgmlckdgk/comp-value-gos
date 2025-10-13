@@ -1,0 +1,12 @@
+-- 적용
+kubectl apply -f postgres-deployment.yml
+
+
+-- 확인
+kubectl get pods
+kubectl get svc
+kubectl get pv,pvc
+
+
+-- 외부 접근
+psql -h 192.168.0.10 -p 30032 -U compvalue -d COMP_VALUE

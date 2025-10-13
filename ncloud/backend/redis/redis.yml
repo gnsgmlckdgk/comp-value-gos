@@ -1,0 +1,167 @@
+# ---------------------------------------------
+# ConfigMap: Redis 설정 파일(redis.conf)을 컨테이너에 주입
+# - 외부 접속 허용, 비밀번호 설정, 영속화(AOF) 등 핵심 옵션 정의
+# ---------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+data:
+  redis.conf: |
+    # 모든 인터페이스에서 수신 (NodePort 외부 접근 허용을 위해 필요)
+    bind 0.0.0.0
+    # 기본 포트
+    port 6379
+    # 테스트/내부망 전제: 보호 모드 끔 (외부 노출 시 방화벽·강한 비밀번호 필수)
+    protected-mode no
+    # 접속 비밀번호
+    requirepass "1234"
+
+    # 데이터 파일이 저장될 경로 (컨테이너 내부 경로)
+    dir /data
+
+    # 데이터 복구 관련
+    # AOF(Append Only File) 사용 → 쓰기 연산 로그로 복구성 향상
+    appendonly yes
+    # AOF fsync 주기: 매초 (성능과 내구성 균형)
+    appendfsync everysec
+
+---
+# ---------------------------------------------
+# PersistentVolume: 호스트(노드) 로컬 디스크를 사용해 데이터 영구 보존
+# - hostPath: /data/redis 에 실제 파일 저장
+# - Retain: PV/PVC 삭제해도 실제 데이터 유지
+# ---------------------------------------------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv
+spec:
+  capacity:
+    storage: 5Gi                # PV 용량
+  accessModes:
+    - ReadWriteOnce             # 단일 노드에서 읽기/쓰기가능
+  persistentVolumeReclaimPolicy: Retain  # PVC 제거돼도 실제 데이터 보존
+  hostPath:
+    path: /data/redis           # 노드(서버)의 실제 디렉토리 경로
+
+---
+# ---------------------------------------------
+# PersistentVolumeClaim: 파드가 사용할 스토리지 청구서
+# - 위의 PV와 바인딩되어 /data에 마운트됨
+# ---------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce             # 단일 노드에서 읽기/쓰기가능
+  resources:
+    requests:
+      storage: 5Gi              # 필요한 최소 용량
+
+---
+# ---------------------------------------------
+# Deployment: Redis 단일 인스턴스 배포(간단 운용용)
+# - securityContext와 initContainer로 권한 문제 최소화
+# - ConfigMap(redis.conf)와 PVC를 컨테이너에 마운트
+# ---------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1                    # 단일 인스턴스 (HA가 필요하면 StatefulSet/Replica 고려)
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # 컨테이너/볼륨 권한 정렬 (root 미사용, 일반 사용자로 실행)
+      securityContext:
+        runAsUser: 1000          # 프로세스를 UID 1000 사용자로 실행
+        runAsGroup: 1000         # 기본 그룹 GID 1000
+        fsGroup: 1000            # 마운트된 볼륨 파일 그룹을 1000으로 설정해 쓰기권한 부여
+      # 최초 마운트 시 /data 소유권을 1000:1000으로 맞춰 권한 문제 방지
+      initContainers:
+        - name: volume-permissions
+          image: busybox:1.36
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /data && \
+              chown -R 1000:1000 /data && \
+              chmod 700 /data
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data   # PV가 마운트될 컨테이너 경로
+      containers:
+        - name: redis
+          image: redis:7-alpine   # 가벼운 알파인 베이스 이미지
+          # 커스텀 설정 파일로 Redis 실행
+          command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+          ports:
+            - containerPort: 6379 # 컨테이너 내부 포트
+          volumeMounts:
+            # 데이터 디렉토리: 실제론 노드의 /data/redis와 연결됨(PV/PVC 경유)
+            - name: redis-storage
+              mountPath: /data
+            # redis.conf 주입 (ConfigMap을 /usr/local/etc/redis/ 에 마운트)
+            - name: redis-config
+              mountPath: /usr/local/etc/redis
+          # 헬스체크: 포트 오픈 여부로 생존/준비 상태 확인
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        # PVC를 파드에 연결 → 위의 volumeMounts:/data 로 탑재
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-pvc
+        # ConfigMap(redis.conf)을 파드에 연결 → 위의 volumeMounts 경로로 탑재
+        - name: redis-config
+          configMap:
+            name: redis-config
+            items:
+              - key: redis.conf
+                path: redis.conf
+
+---
+# ---------------------------------------------
+# Service(NodePort): 외부 접근을 위한 고정 포트 공개
+# - 노드 IP:30079 → 파드의 6379로 포워딩
+# - 비밀번호(requirepass "1234")로 보호됨
+# ---------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-nodeport
+  labels:
+    app: redis
+spec:
+  type: NodePort                 # 외부에서 노드IP:nodePort로 접근 가능
+  selector:
+    app: redis                   # 이 라벨을 가진 파드로 트래픽 전달
+  ports:
+    - name: redis
+      port: 6379                 # 클러스터 내부에서의 서비스 포트
+      targetPort: 6379           # 파드 컨테이너 포트
+      nodePort: 30079            # 외부 공개 포트(30000~32767 범위)

@@ -80,11 +80,11 @@ metadata:
   labels:
     app: comp-value-service
 spec:
-  type: ClusterIP                          # 클러스터 내부 전용 서비스
+  type: NodePort
   selector:
     app: comp-value-service                # 해당 라벨을 가진 파드로 연결
   ports:
     - name: http
-      nodePort: 38081                      # 호스트 외부 포트 (nodePort -> port -> targetPort)
+      nodePort: 30081                      # 호스트 외부 포트 (nodePort -> port -> targetPort)
       port: 18080                          # 서비스가 노출할 포트
       targetPort: 18080                    # 컨테이너 내부 포트

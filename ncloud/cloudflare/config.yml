@@ -3,5 +3,5 @@ credentials-file: /Users/hch/.cloudflared/cf2036cf-2c2b-4778-995a-0be517e20201.j
 
 ingress:
   - hostname: compvalue.xyz
-    service: http://localhost:80
-  - service: http_status:404%
+    service: http://127.0.0.1:80
+  - service: http_status:404

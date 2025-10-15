@@ -43,6 +43,20 @@ spec:
             - name: SPRING_REDIS_PASSWORD
               value: "1234"                 # Redis 비밀번호
 
+            # --- OPEN DART API KEY ---
+            - name: OPEN_DART_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-key-secret
+                  key: OPEN_DART_API_KEY
+
+            # --- FMP API KEY ---
+            - name: FMP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-key-secret
+                  key: FMP_API_KEY
+
             # --- (선택) 환경 설정 / 시간대 ---
             # - name: SPRING_PROFILES_ACTIVE
             #   value: "prod"

@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: compvalue-ingress
+  annotations:
+    # 안정성/대용량 전송 관련
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: compvalue.xyz
+    http:
+      paths:
+      # 백엔드: /dart/** (경로를 자르지 않고 그대로 전달)
+      - path: /dart/
+        pathType: Prefix
+        backend:
+          service:
+            name: comp-value-service
+            port:
+              number: 18080
+      # 프론트: 나머지 전부
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: comp-value-web
+            port:
+              number: 80

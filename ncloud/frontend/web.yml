@@ -6,6 +6,7 @@ metadata:
     app: comp-value-web
 spec:
   replicas: 1                              # 프론트는 1개부터 시작
+  revisionHistoryLimit: 3                  # 과거 3개까지만 보관
   selector:
     matchLabels:
       app: comp-value-web

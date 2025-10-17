@@ -75,6 +75,7 @@ metadata:
     app: redis
 spec:
   replicas: 1                    # 단일 인스턴스 (HA가 필요하면 StatefulSet/Replica 고려)
+  revisionHistoryLimit: 3        # 과거 3개까지만 보관
   selector:
     matchLabels:
       app: redis

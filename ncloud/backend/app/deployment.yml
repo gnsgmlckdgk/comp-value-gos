@@ -12,6 +12,7 @@ metadata:
     app: comp-value-service                # 라벨 (Service 연결용)
 spec:
   replicas: 1                              # 파드 개수 (1개 실행)
+  revisionHistoryLimit: 3                  # 과거 3개까지만 보관
   selector:
     matchLabels:
       app: comp-value-service              # 파드 선택 기준 (라벨 일치해야 함)

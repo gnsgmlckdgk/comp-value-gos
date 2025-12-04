@@ -1,0 +1,6 @@
+# Kubernetes Secret 파일 (민감한 정보 포함)
+backend/db/backup-secret.yml
+
+# 백업 테스트 파일
+*.sql
+*.sql.gpg

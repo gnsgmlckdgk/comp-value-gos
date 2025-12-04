@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-backup-script
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "=== PostgreSQL Backup Started: $(date) ==="
+
+    # 백업 디렉토리 설정
+    BACKUP_DIR="/backup"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_FILE="postgres_backup_${TIMESTAMP}.sql"
+    ENCRYPTED_FILE="${BACKUP_FILE}.gpg"
+
+    # Git 설정
+    cd $BACKUP_DIR
+    git config --global user.email "backup-bot@compvalue.local"
+    git config --global user.name "PostgreSQL Backup Bot"
+
+    # 저장소 초기화 또는 pull
+    if [ ! -d ".git" ]; then
+      echo "Cloning repository..."
+      git clone https://oauth2:${GITLAB_TOKEN}@${GITLAB_REPO} .
+    else
+      echo "Pulling latest changes..."
+      git pull origin main || git pull origin master || true
+    fi
+
+    # PostgreSQL 덤프 생성
+    echo "Creating database dump..."
+    PGPASSWORD=${POSTGRES_PASSWORD} pg_dump \
+      -h ${POSTGRES_HOST} \
+      -U ${POSTGRES_USER} \
+      -d ${POSTGRES_DB} \
+      -F p \
+      --no-owner \
+      --no-acl \
+      > ${BACKUP_FILE}
+
+    # 덤프 파일 암호화
+    echo "Encrypting backup..."
+    gpg --batch --yes --passphrase "${BACKUP_PASSPHRASE}" \
+      --symmetric --cipher-algo AES256 \
+      -o ${ENCRYPTED_FILE} ${BACKUP_FILE}
+
+    # 원본 삭제 (암호화된 파일만 보관)
+    rm ${BACKUP_FILE}
+
+    # Git에 추가
+    echo "Adding to git..."
+    git add ${ENCRYPTED_FILE}
+
+    # 오래된 백업 삭제 (최근 3개만 유지)
+    echo "Cleaning old backups..."
+    ls -t postgres_backup_*.sql.gpg | tail -n +4 | xargs -r git rm -f
+
+    # 변경사항이 있으면 커밋 및 푸시
+    if ! git diff --staged --quiet; then
+      echo "Committing and pushing..."
+      git commit -m "Backup: ${TIMESTAMP}"
+      git push origin main || git push origin master
+      echo "=== Backup Completed Successfully ==="
+    else
+      echo "=== No changes to backup ==="
+    fi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+spec:
+  # 매일 오전 3시에 실행 (한국 시간 기준, UTC+9 고려 시 18:00 UTC)
+  schedule: "0 18 * * *"  # UTC 기준, 서버 시간에 맞게 조정 필요
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: postgres-backup
+            image: postgres:15
+            command:
+              - /bin/bash
+              - -c
+              - |
+                apt-get update && apt-get install -y git gnupg
+                chmod +x /scripts/backup.sh
+                /scripts/backup.sh
+            env:
+            - name: POSTGRES_HOST
+              value: "postgres-service"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-secret
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-secret
+                  key: POSTGRES_PASSWORD
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-secret
+                  key: GITLAB_TOKEN
+            - name: GITLAB_REPO
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-secret
+                  key: GITLAB_REPO
+            - name: BACKUP_PASSPHRASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-secret
+                  key: BACKUP_PASSPHRASE
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+            - name: backup-script
+              mountPath: /scripts
+          volumes:
+          - name: backup-storage
+            emptyDir: {}
+          - name: backup-script
+            configMap:
+              name: postgres-backup-script
+              defaultMode: 0755

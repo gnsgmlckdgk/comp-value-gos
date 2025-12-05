@@ -61,8 +61,8 @@ spec:
             # --- (선택) 환경 설정 / 시간대 ---
             # - name: SPRING_PROFILES_ACTIVE
             #   value: "prod"
-            # - name: TZ
-            #   value: "Asia/Seoul"
+            - name: TZ
+              value: "Asia/Seoul"
 
           # --- (선택) 헬스체크: 액추에이터 사용 시 ---
           # readinessProbe:

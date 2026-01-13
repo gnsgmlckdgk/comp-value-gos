@@ -59,10 +59,13 @@ spec:
                   key: FMP_API_KEY
 
             # --- (선택) 환경 설정 / 시간대 ---
-            # - name: SPRING_PROFILES_ACTIVE
-            #   value: "prod"
             - name: TZ
               value: "Asia/Seoul"
+
+            # --- 앱 로컬 여부 ---
+            - name: APP_LOCAL
+              value: "false"
+
 
           # --- (선택) 헬스체크: 액추에이터 사용 시 ---
           # readinessProbe:

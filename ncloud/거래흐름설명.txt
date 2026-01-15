@@ -26,4 +26,8 @@ M1 Mac 이라 NodePort 로 외부접근이 막혀서 터널로 접근
 확인
 - kubectl -n ingress-nginx get svc ingress-nginx-controller -o wide
 
+클러스터 삭제후 다시 만드는 경우
+minikube addons enable ingress
+로 ingress 애드온 활성화 해줘야함
+
 

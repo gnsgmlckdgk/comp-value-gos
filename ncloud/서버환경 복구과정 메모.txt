@@ -1,0 +1,264 @@
+
+1. Minikube compvalue 클러스터 머신러닝 파드(comp-value-ml) 추가 후 학습할때 메모리 부족으로 클러스터 노드가 죽음
+2. 메모리 늘려야하는 상황이라 기존 클러스터 지우고 다시 생성해야해서 데이터 복구, 설정 복구 등 할게 많았음
+
+
+ minikube (compvalue 프로파일) 메모리 증가 전체 절차 (참고) ================================================
+
+  사전 준비: 현재 프로파일 확인
+
+  # 프로파일 목록 확인
+  minikube profile list
+
+  # compvalue 프로파일 활성화
+  minikube profile compvalue
+
+  # 또는 모든 명령에 -p compvalue 옵션 추가
+
+  1단계: 백업 (필수, 15분)
+
+  # 1. models 폴더 백업 (PVC 데이터)
+  kubectl exec -it deployment/stock-predictor -n default -- tar czf /tmp/models-backup.tar.gz /app/models
+
+  # Pod 이름 가져오기
+  POD_NAME=$(kubectl get pod -l app=stock-predictor -n default -o jsonpath='{.items[0].metadata.name}')
+
+  # 로컬로 복사
+  kubectl cp default/${POD_NAME}:/tmp/models-backup.tar.gz ./models-backup.tar.gz
+
+  # 백업 파일 확인
+  ls -lh ./models-backup.tar.gz
+
+  # 2. Secret 백업
+  kubectl get secret api-key-secret -n default -o yaml > api-key-secret-backup.yaml
+  kubectl get secret ghcr-secret -n default -o yaml > ghcr-secret-backup.yaml
+
+  # 3. PVC 정보 백업
+  kubectl get pvc -n default -o yaml > pvc-backup.yaml
+
+  # 4. Deployment 백업 (git에 있지만 안전하게)
+  kubectl get deployment stock-predictor -n default -o yaml > deployment-backup.yaml
+
+  # 5. PostgreSQL, Redis 등 다른 리소스 확인
+  kubectl get all -n default
+  kubectl get pvc -n default
+  kubectl get secret -n default
+
+  # 6. PostgreSQL 데이터 백업 (선택사항, 중요 데이터라면)
+  kubectl exec -it deployment/postgres -n default -- pg_dump -U compvalue COMP_VALUE > db-backup.sql
+
+  2단계: 포트포워딩 종료
+
+  # 실행 중인 port-forward 프로세스 확인
+  ps aux | grep "port-forward"
+
+  # 모든 port-forward 종료
+  pkill -f "kubectl port-forward"
+
+  # 확인
+  ps aux | grep "port-forward"  # 아무것도 안 나와야 함
+
+  3단계: minikube 삭제 및 재생성 (10분)
+
+  # compvalue 프로파일 중지
+  minikube -p compvalue stop
+
+  # compvalue 프로파일 삭제 (⚠️ 이 단계에서 모든 데이터 삭제됨)
+  minikube -p compvalue delete
+
+  # 삭제 확인
+  minikube profile list
+  # compvalue가 목록에서 사라져야 함
+
+  # compvalue 프로파일로 새로 시작 (메모리 12GB, CPU 6, 디스크 40GB)
+  minikube start -p compvalue --memory=12288 --cpus=6 --disk-size=40g --driver=docker
+
+  # 시작 완료까지 2-3분 소요
+  # 출력:
+  # 🏄  Done! kubectl is now configured to use "compvalue" cluster and "default" namespace by default
+
+  4단계: 클러스터 상태 확인
+
+  # 프로파일 설정
+  minikube profile compvalue
+
+  # 노드 확인
+  kubectl get nodes
+  # STATUS: Ready 확인
+
+  # 메모리 확인
+  minikube -p compvalue ssh
+  free -h
+  # 출력 예상:
+  # Mem: 11.7Gi (12GB 할당됨)
+  # Swap: 1.0Gi
+  exit
+
+  # 네임스페이스 확인
+  kubectl get ns
+  # default가 있어야 함 (자동 생성됨)
+
+  5단계: PVC 재생성 (5분)
+
+  # PVC 생성
+  kubectl apply -f k8s/pvc.yaml
+
+  # 상태 확인 (Bound 될 때까지 대기)
+  kubectl get pvc -n default
+  # 출력:
+  # NAME                           STATUS   VOLUME   CAPACITY
+  # stock-predictor-models-pvc     Bound    pvc-xxx  10Gi
+  # stock-predictor-logs-pvc       Bound    pvc-xxx  5Gi
+
+  # Bound 안 되면 잠시 대기 후 다시 확인
+  watch kubectl get pvc -n default
+
+  6단계: Secret 재생성 (2분)
+
+  # 방법 1: 백업에서 복구 (UUID 등이 변경되어 안 될 수 있음)
+  # kubectl apply -f api-key-secret-backup.yaml
+  # kubectl apply -f ghcr-secret-backup.yaml
+
+  # 방법 2: 새로 생성 (권장)
+    => 새로생성할때 yaml 백업한거에서 데이터 가져오면 base64 한번 더 풀어줘야함, 이왕이면 원본으로 등록하는거 권장
+  # FMP API Key Secret
+  kubectl create secret generic api-key-secret \
+    --from-literal=FMP_API_KEY=<YOUR_FMP_API_KEY> \
+    -n default
+
+  # GitHub Container Registry Secret
+  kubectl create secret docker-registry ghcr-secret \
+    --docker-server=ghcr.io \
+    --docker-username=gnsgmlckdgk \
+    --docker-password=<YOUR_GITHUB_PAT> \
+    --docker-email=gnsgmlckdgk@users.noreply.github.com \
+    -n default
+
+  # 확인
+  kubectl get secret -n default
+
+  7단계: PostgreSQL & Redis 재배포 (필요 시)
+
+  # PostgreSQL 있는지 확인
+  kubectl get deployment postgres -n default
+
+  # 없다면 배포 (YAML 파일이 있다고 가정)
+  # kubectl apply -f k8s/postgres.yaml
+
+  # Redis 확인
+  kubectl get deployment redis -n default
+
+  # 없다면 배포
+  # kubectl apply -f k8s/redis.yaml
+
+  # 서비스 확인
+  kubectl get svc -n default
+  # postgres-service, redis-nodeport 확인
+
+  8단계: stock-predictor Deployment 배포 (5분)
+
+  # Deployment 배포
+  kubectl apply -f k8s/deployment.yaml
+
+  # Pod 생성 확인
+  kubectl get pods -n default
+  # stock-predictor-xxx가 Running 될 때까지 대기
+
+  # 실시간 확인
+  watch kubectl get pods -n default
+
+  # 로그 확인
+  kubectl logs -f deployment/stock-predictor -n default
+
+  9단계: models 데이터 복구 (5분)
+
+  # Pod 이름 가져오기
+  POD_NAME=$(kubectl get pod -l app=stock-predictor -n default -o jsonpath='{.items[0].metadata.name}')
+
+  # 백업 파일 복사
+  kubectl cp ./models-backup.tar.gz default/${POD_NAME}:/tmp/
+
+  # Pod 접속하여 압축 해제
+  kubectl exec -it deployment/stock-predictor -n default -- bash
+
+  # Pod 내부에서 실행:
+  cd /app
+  tar xzf /tmp/models-backup.tar.gz --strip-components=2
+  ls -la models/
+  # 모델 파일들이 복구되었는지 확인
+  exit
+
+  # 또는 한 줄로:
+  kubectl exec -it deployment/stock-predictor -n default -- tar xzf /tmp/models-backup.tar.gz -C /app --strip-components=2
+
+  # 확인
+  kubectl exec -it deployment/stock-predictor -n default -- ls -la /app/models/
+
+  10단계: 포트포워딩 재설정 (1분)
+
+  # PostgreSQL 포트포워딩
+  kubectl port-forward svc/postgres-service 5433:5432 -n default &
+
+  # Redis 포트포워딩 (필요 시)
+  kubectl port-forward svc/redis-nodeport 6380:6379 -n default &
+
+  # 확인
+  ps aux | grep "port-forward"
+
+  11단계: PostgreSQL 데이터 복구 (선택사항)
+
+  # 백업했다면 복구
+  kubectl cp ./db-backup.sql default/$(kubectl get pod -l app=postgres -n default -o jsonpath='{.items[0].metadata.name}'):/tmp/
+
+  kubectl exec -it deployment/postgres -n default -- psql -U compvalue -d COMP_VALUE -f /tmp/db-backup.sql
+
+  12단계: 최종 확인 (5분)
+
+  # 1. 메모리 확인
+  minikube -p compvalue ssh
+  free -h
+  # Mem: 11.7Gi 확인
+  exit
+
+  # 2. 모든 리소스 확인
+  kubectl get all -n default
+  kubectl get pvc -n default
+  kubectl get secret -n default
+
+  # 3. Pod 상태 확인
+  kubectl describe pod -l app=stock-predictor -n default
+  # Events에 에러가 없는지 확인
+
+  # 4. 로그 확인
+  kubectl logs -f deployment/stock-predictor -n default
+
+  # 5. 연결 테스트 (로컬)
+  cd /Users/hch/Files/Dev/project/comp-value-ml
+  source venv/bin/activate
+  python test_local.py --test-connection
+
+  # 6. 모델 파일 확인
+  kubectl exec -it deployment/stock-predictor -n default -- ls -la /app/models/ | head -20
+
+===================================================================
+DB 데이터 복구
+- ncloud/backend/db/BACKUP_README.md 참고
+
+참고사항
+1. Gitlab 에서 복구 데이터 다운로드 ~.gpg
+
+2. - BACKUP_PASSPHRASE 값 확인 필요 (백업 데이터 복호화시 필요)
+    - kubectl get secret [postgres-backup] -o yaml 에서 BACKUP_PASSPHRASE 검색
+    - 값 확인후 base64 디코딩 => 2번 인코딩 되어있어서 2번 디코딩 했음
+
+3. gpg --decrypt --batch --passphrase "your-backup-passphrase" \
+   postgres_backup_20250104_030000.sql.gpg > restore.sql
+   => gpg 명령어 없으면 설치하면 됨
+
+4. 백단 앱 실행해서 테이블 생성되어있으면 테이블 전부 삭제 후 진행
+   => 테이블 복구, 시퀀스 복구, 데이터 복구 등등 한번에 됨
+   => psql 이라 sql 툴에서는 안되고 pod 에 복사해서 BACKUP_README.me 에 있는 절차대로 진행하면 됨
+
+5. secret yaml 로 뽑은 값은 base64 되서 출력되서 한번 풀어주고 재등록 해야함
+
+=> 이후 절차는 BACKUP_README.md 참고해서 진행

@@ -72,8 +72,8 @@ kind: CronJob
 metadata:
   name: postgres-backup
 spec:
-  # 매일 오전 3시에 실행 (한국 시간 기준, UTC+9 고려 시 18:00 UTC)
-  schedule: "0 18 * * *"  # UTC 기준, 서버 시간에 맞게 조정 필요
+  # 매일 오후 11시50분에 실행 (한국 시간 기준, UTC+9 고려 시 18:00 UTC)
+  schedule: "50 14 * * *"  # UTC 기준, 서버 시간에 맞게 조정 필요
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
